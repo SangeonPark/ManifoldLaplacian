@@ -9,10 +9,43 @@ import numpy as np
 import scipy
 import scipy.sparse
 import scipy.sparse.linalg
+import math
+
 
 from tqdm import tqdm
 
 
+
+
+def sym_op(x, zero_trace=False):
+  """Given X, makes L(A) = X @ A @ X' for symmetric matrices A.
+  If A is not symmetric, L(A) will return X @ (A_L + A_L') @ X' where A_L is
+  the lower triangular of A (with the diagonal divided by 2).
+  Args:
+    x: The matrix from which to construct the operator
+    zero_trace (optional): If true, restrict the operator to only act on
+      matrices with zero trace, effectively reducing the dimensionality by one.
+  Returns:
+    A matrix Y such that vec(L(A)) = Y @ vec(A).
+  """
+  n = x.shape[0]
+  # Remember to subtract off the diagonal once
+  xx = (np.einsum('ik,jl->ijkl', x, x) +
+        np.einsum('il,jk->ijkl', x, x) -
+        np.einsum('ik,jl,kl->ijkl', x, x, np.eye(n)))
+  xx = xx[np.tril_indices(n)]
+  xx = xx.transpose(1, 2, 0)
+  xx = xx[np.tril_indices(n)]
+  xx = xx.T
+  if zero_trace:
+    diag_idx = np.cumsum([0]+list(range(2, n)))
+    proj_op = np.eye(n*(n+1)//2)[:, :-1]
+    proj_op[-1, diag_idx] = -1
+    # multiply by operator that completes last element of diagonal
+    # for a zero-trace matrix
+    xx = xx @  proj_op
+    xx = xx[:-1]
+  return xx
 
 
 def make_nearest_neighbors_graph(data, k, n=1000):
@@ -56,7 +89,7 @@ def make_tangents(data, neighbor_graph, k):
     return tangents
 
 
-def visualize_tangents():
+#def visualize_tangents():
 
 
 
@@ -101,8 +134,58 @@ def make_2nd_order_laplacian(connection, neighbor_graph, sym=True, zero_trace=Tr
             index += 1
     indptr.append(index)
     indptr = np.array(indptr)
+    laplacian = scipy.sparse.bsr_matrix((data, indices, indptr),
+                                          shape=(n*bsz, n*bsz))
+    logging.info('Built 2nd-order graph connection Laplacian.')
+    return laplacian
 
-  laplacian = scipy.sparse.bsr_matrix((data, indices, indptr),
-                                      shape=(n*bsz, n*bsz))
-  logging.info('Built 2nd-order graph connection Laplacian.')
-  return laplacian
+
+def make_general_order_laplacian(connection, neighbor_graph, p,  sym=False,antisym=False,zero_trace=False):
+    """Make symmetric zero-trace second-order graph connection Laplacian."""
+    n = neighbor_graph.shape[0]
+    k = list(connection.values())[0].shape[0]
+    # p is the tensor oder
+    #bsz = (k*(k+1)//2 - 1 if zero_trace else k*(k+1)//2) if sym else k**2
+    bsz = k**p
+    # find symmetrized dimension
+    # bsz = math.comb(k+p-1,p)
+    data = np.zeros((neighbor_graph.nnz + n, bsz, bsz), dtype=np.float32)
+    indptr = []
+    indices = np.zeros(neighbor_graph.nnz + n)
+    index = 0
+    #print('here')
+    #print(p)
+    for i in tqdm(range(n)):
+        indptr.append(index)
+        #data[index] = len(neighbor_graph.rows[i]) * np.eye(bsz)
+        #indices[index] = i
+        #index += 1
+        for j in neighbor_graph.rows[i]:
+            #if sym:
+            #    kron = sym_op(connection[(j, i)], zero_trace=zero_trace)
+            #else:
+                #print(p)
+            if p == 1:
+                kron = connection[(j, i)]
+                #print(kron)
+            elif p== 2:
+                kron = np.kron(connection[(j, i)], connection[(j, i)])
+                #print("here")
+                if sym == True:
+                    kron = 0.5*(np.kron(connection[(j, i)], connection[(j, i)])+np.kron(connection[(i, j)], connection[(i, j)]))
+                    #print(kron.shape)
+            elif p>2:
+                kron = np.kron(connection[(j, i)], connection[(j, i)])
+                for k in range(p-2):
+                    kron = np.kron(kron, connection[(j, i)])
+            data[index] = -kron
+            indices[index] = j
+            index += 1
+    indptr.append(index)
+    indptr = np.array(indptr)
+    for i in range(50):
+        print(data[i])
+    laplacian = scipy.sparse.bsr_matrix((data, indices, indptr),
+                                          shape=(n*bsz, n*bsz))
+    logging.info('Built general-order graph connection Laplacian.')
+    return laplacian
