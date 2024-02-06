@@ -192,8 +192,8 @@ def visualize_grid_torus(n, outer, inner):
 
     fig, ax = plt.subplots(1, 1, subplot_kw={'projection':'3d'})
     ax.plot_wireframe(x, y, z, color='k', rstride=1, cstride=1,linewidth=1, alpha=0.3)
-    minbound = -3
-    maxbound = 3
+    minbound = -outer
+    maxbound = outer
     ax.auto_scale_xyz([minbound, maxbound], [minbound, maxbound], [minbound, maxbound])
     #ax.set_box_aspect([1,1,1])
     #ax1 = fig.add_subplot(121, projection='3d')

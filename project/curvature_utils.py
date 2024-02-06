@@ -80,3 +80,51 @@ def second_fundamental_form(local_coords, k):
     print(h.shape)
     h = h[:,1:]
     return h
+
+def get_second_fundamental_form_with_weights(data, pca_adjacency, k):
+    """Construct all tangent vectors and the normals for the dataset."""
+    # k is the dimension of the manifold
+    tangents = np.zeros((data.shape[0], k, data.shape[1]), dtype=np.float32)
+    normals  = np.zeros((data.shape[0], data.shape[1]-k, data.shape[1]), dtype=np.float32)
+    h_total  = np.zeros((data.shape[0], int(k*(k+1)/2),data.shape[1]-k), dtype=np.float32)
+    for i in tqdm(range(data.shape[0])):
+        centered_nbhrs = data[pca_adjacency.rows[i]] - data[i]
+
+        
+        #print(centered_nbhrs)
+        #print(type(pca_adjacency.data[i]))
+        weighted_centered_nbhrs = centered_nbhrs * np.asarray(pca_adjacency.data[i])[:,None]
+
+        _, _, u = np.linalg.svd(weighted_centered_nbhrs, full_matrices=False)
+
+ 
+
+
+        #each row of local_coords is each point of diff represented in local coordinates
+        
+        #recheck this !!!!!!!!!!!!!!!!!!!! whether to use weighted, and the error
+        local_coords = weighted_centered_nbhrs @ u.T
+        #local_coords = centered_nbhrs @ u.T
+        Np = local_coords.shape[0]
+        n_amb = local_coords.shape[1]
+        normal_coordinates = local_coords[:, k:]
+        tangent_coordinates = local_coords[:, :k]
+        ind_a, ind_b = np.triu_indices(k)
+        #ind_a, ind_b = np.where(np.triu(np.ones((k, k))))
+        #ind_a, ind_b = np.where(np.ones((k, k)))
+        #print(ind_a, ind_b)
+        quadt = np.multiply(tangent_coordinates[:, ind_a], tangent_coordinates[:, ind_b])
+        quadt = np.insert(quadt, 0, 1, axis=1)
+        #print(quadt.T @ quadt)
+        h = np.linalg.pinv(quadt.T @ quadt) @ quadt.T @ normal_coordinates
+        #print(h.shape)
+        h = h[1:,:]
+        #print(h.shape)
+        h_total[i] = h
+
+    true_h = np.zeros((data.shape[0], k, k, data.shape[1]-k))
+    ind_a, ind_b = np.triu_indices(k)
+    true_h[:,ind_a, ind_b,:] = h_total
+    true_h[:,ind_b, ind_a,:] = h_total
+    logging.info('Computed the second fundamental form')
+    return tangents, normals, local_coords, h_total, true_h

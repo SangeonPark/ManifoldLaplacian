@@ -76,7 +76,7 @@ def weitzenbock_to_bsr(weitzenbock):
     indptr = np.arange(0, n+1)
     indices = np.arange(0, n)
     block_weitzenbock = scipy.sparse.bsr_matrix((weitzenbock, indices, indptr),
-                                          shape=(n*bsz, n*bsz))
+                                          shape=(n*bsz, n*bsz),dtype=np.float32)
     return block_weitzenbock
 
 

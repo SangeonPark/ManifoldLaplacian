@@ -158,8 +158,9 @@ def make_general_order_laplacian(connection, neighbor_graph, p,  sym=False,antis
     for i in tqdm(range(n)):
         indptr.append(index)
         #data[index] = len(neighbor_graph.rows[i]) * np.eye(bsz)
-        #indices[index] = i
-        #index += 1
+        data[index] = np.eye(bsz)
+        indices[index] = i
+        index += 1
         for j in neighbor_graph.rows[i]:
             #if sym:
             #    kron = sym_op(connection[(j, i)], zero_trace=zero_trace)
